@@ -56,6 +56,7 @@ jobs:
         with: { path: gki-clo }
 
       - name: Patch TCP Struct regression
+        working-directory: gki-clo
         run: |
           sed -i '/tcpi_total_rto_recoveries;/d' include/uapi/linux/tcp.h
           sed -i '/tcpi_total_rto;/d' include/uapi/linux/tcp.h
