@@ -200,6 +200,19 @@ jobs:
         with:
           path: gki-clo
 
+      - name: Patch TCP Struct regression
+        working-directory: gki-clo
+        run: |
+          sed -i '/tcpi_total_rto_recoveries;/d' include/uapi/linux/tcp.h
+          sed -i '/tcpi_total_rto;/d' include/uapi/linux/tcp.h
+          sed -i '/tcpi_total_rto_time;/d' include/uapi/linux/tcp.h
+          sed -i '/info->tcpi_total_rto_recoveries = tp->total_rto_recoveries;/d' net/ipv4/tcp.c
+          sed -i '/info->tcpi_total_rto = tp->total_rto;/d' net/ipv4/tcp.c
+          sed -i '/info->tcpi_total_rto_time = tp->total_rto_time;/d' net/ipv4/tcp.c
+          sed -i '/tp->total_rto_recoveries++;/d' net/ipv4/tcp_input.c
+          sed -i '/tp->total_rto++;/d' net/ipv4/tcp_input.c
+
+
       - name: Setup Build Environment
         run: |
           sudo apt-get update
