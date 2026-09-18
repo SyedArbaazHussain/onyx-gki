@@ -291,6 +291,20 @@ else
         (cd "$MODULES_DIR/$REPO_NAME" && git fetch origin && git reset --hard "origin/$BRANCH" || true)
     fi
 
+    if [ "$ROOT" == "resukisu" ]; then
+        echo "[+] Pinning ReSukiSU to $RESUKISU_COMMIT"
+        (
+        cd "$MODULES_DIR/$REPO_NAME"
+        git fetch --no-tags origin "$RESUKISU_COMMIT"
+        git checkout --detach "$RESUKISU_COMMIT"
+        )
+    else
+        (
+        cd "$MODULES_DIR/$REPO_NAME"
+        git reset --hard "origin/$BRANCH"
+        )
+    fi
+
     # Apply SUSFS
     if [ "$VARIANT" == "susfs" ]; then
         SUSFS_DIR="$MODULES_DIR/susfs4ksu"
