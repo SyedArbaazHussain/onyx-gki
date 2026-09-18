@@ -37,6 +37,7 @@ fi
 # ==========================================
 
 VERSION="1.1"
+RESUKISU_COMMIT="6ec8d9a8a8be30878c388504cacf8ae7849c757b"
 
 # Parse CLI arguments (key=value)
 for arg in "$@"; do
@@ -71,7 +72,7 @@ fi
 
 if [ "$SPOOF_UNAME" == "on" ]; then
     # Spoof to standard Android stock naming (remove custom localversion)
-    sed -i 's/CONFIG_LOCALVERSION=.*/CONFIG_LOCALVERSION=\"\"/g' arch/arm64/configs/konoha_defconfig
+    sed -i 's/CONFIG_LOCALVERSION=.*/CONFIG_LOCALVERSION=""/g' arch/arm64/configs/konoha_defconfig
 fi
 
 # ==========================================
@@ -285,10 +286,24 @@ else
     mkdir -p "$MODULES_DIR"
     if [ ! -d "$MODULES_DIR/$REPO_NAME" ]; then
         echo "[+] Cloning $REPO_NAME..."
-        git clone -b "$BRANCH" "$ROOT_REPO" "$MODULES_DIR/$REPO_NAME"
+        git clone "$ROOT_REPO" "$MODULES_DIR/$REPO_NAME"
     else
-        echo "[+] Updating $REPO_NAME..."
-        (cd "$MODULES_DIR/$REPO_NAME" && git fetch origin && git reset --hard "origin/$BRANCH" || true)
+        echo "[+] Refreshing $REPO_NAME..."
+        (cd "$MODULES_DIR/$REPO_NAME" && git fetch --no-tags origin || true)
+    fi
+
+    if [ "$ROOT" == "resukisu" ]; then
+        echo "[+] Pinning ReSukiSU to $RESUKISU_COMMIT"
+        (
+            cd "$MODULES_DIR/$REPO_NAME"
+            git fetch --no-tags origin
+            git checkout --detach "$RESUKISU_COMMIT"
+        )
+    else
+        (
+            cd "$MODULES_DIR/$REPO_NAME"
+            git reset --hard "origin/$BRANCH" || true
+        )
     fi
 
     # Apply SUSFS
@@ -373,8 +388,21 @@ else
     ln -sf "$MODULES_DIR/$REPO_NAME/kernel" "$KERNEL_DIR/drivers/kernelsu"
 fi
 
+# ReSukiSU must keep its native SUSFS integration untouched.
+if [ "$ROOT" == "resukisu" ] && [ "$VARIANT" == "susfs" ]; then
+    echo "[+] Verifying native ReSukiSU SUSFS compatibility..."
+    if ! grep -q 'TIF_PROC_IN_KSU_EXECVE' "$MODULES_DIR/ReSukiSU/kernel/feature/sucompat.h" 2>/dev/null; then
+        echo "[-] Pinned ReSukiSU revision is missing TIF_PROC_IN_KSU_EXECVE"
+        exit 1
+    fi
+    if ! grep -q 'struct filename \*\*filename' "$MODULES_DIR/ReSukiSU/kernel/feature/sucompat.h" 2>/dev/null; then
+        echo "[-] Pinned ReSukiSU revision is missing the SUSFS faccessat API"
+        exit 1
+    fi
+fi
+
 # Run SUSFS fixup if needed (after root module is symlinked/created)
-if [ "$VARIANT" == "susfs" ] && [ "$VARIANT" != "stock" ]; then
+if [ "$VARIANT" == "susfs" ] && [ "$VARIANT" != "stock" ] && [ "$ROOT" != "resukisu" ]; then
     echo "[+] Running SUSFS compatibility fixup ($ROOT)..."
     bash "$KERNEL_DIR/ksu_susfs_fixup.sh" "$KERNEL_DIR/drivers/kernelsu" "$ROOT"
 fi
@@ -397,7 +425,7 @@ echo " Debug Mode:   ${DEBUG_MODE^^}"
 [ "$VARIANT" != "stock" ] && echo " Variant:   ${VARIANT} ($REPO_NAME)" || echo " Variant:   stock"
 echo " LTO:       ${LTO_TYPE^^}"
 if [ "$VARIANT" != "stock" ]; then
-    _ROOT_COMMIT=$(git -C "$MODULES_DIR/$REPO_NAME" rev-parse --short HEAD 2>/dev/null || echo "n/a")
+    _ROOT_COMMIT=$(git -C "$MODULES_DIR/$REPO_NAME" rev-parse HEAD 2>/dev/null || echo "n/a")
     echo " Root:      $REPO_NAME @ $_ROOT_COMMIT"
 fi
 if [ "$VARIANT" == "susfs" ]; then
